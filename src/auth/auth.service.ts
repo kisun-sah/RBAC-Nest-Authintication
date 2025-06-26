@@ -1,41 +1,85 @@
-import { underline } from './../../node_modules/@colors/colors/index.d';
-import { Injectable, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { AuthDto } from './dto';
-import { PrismaService } from 'src/prisma/prisma.service';
 import * as argon from 'argon2';
-import { dot } from 'node:test/reporters';
-
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import { Prisma } from '@prisma/client'; // ✅ FIX: use correct Prisma import
 
 @Injectable()
 export class AuthService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
+  ) { }
 
-   async signup(dto: AuthDto) {
-    // generate the password hash
-    const hash = await argon.hash(dto.password);
+  /**
+   * Registers a new user with hashed password
+   */
+  async signup(dto: AuthDto): Promise<{ access_token: string }> {
+    const hashedPassword = await argon.hash(dto.password);
 
     try {
-      // save the new user in the db
       const user = await this.prisma.user.create({
         data: {
           email: dto.email,
-          hash,
+          hash: hashedPassword,
         },
       });
+      console.log(dto.email)
 
-      // Remove hash before returning user
-      // const { hash: _, ...userWithoutHash } = user;
-    return user;
+      return this.generateToken(user.id, user.email);
     } catch (error) {
-      if (error.code === 'P2002') {
-        throw new ForbiddenException('Email already exists');
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ForbiddenException('Email already in use');
       }
       throw error;
     }
   }
 
- async signin() {
-  return " this is a signin"
+  /**
+   * Logs in a user after verifying credentials
+   */
+  async signin(dto: AuthDto): Promise<{ access_token: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
 
-}
+    if (!user) {
+      throw new ForbiddenException('Invalid credentials');
+    }
+
+    const passwordMatches = await argon.verify(user.hash, dto.password);
+
+    if (!passwordMatches) {
+      throw new ForbiddenException('Invalid credentials');
+    }
+
+    return this.generateToken(user.id, user.email);
+  }
+
+  /**
+   * Generates JWT access token
+   */
+  private async generateToken(
+    userId: number,
+    email: string,
+  ): Promise<{ access_token: string }> {
+    const payload = { sub: userId, email };
+    const secret = this.config.getOrThrow<string>('JWT_SECRET'); // throws if not set
+
+    const token = await this.jwt.signAsync(payload, {
+      expiresIn: '15m',
+      secret,
+    });
+
+    return { access_token: token };
+  }
 }

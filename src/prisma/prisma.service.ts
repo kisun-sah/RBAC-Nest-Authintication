@@ -1,19 +1,27 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit {
-  constructor() {
+export class PrismaService extends PrismaClient {
+  constructor(config: ConfigService) {
     super({
       datasources: {
         db: {
-          url: 'postgresql://postgres:123@localhost:5434/nest',
+          url: config.get('DATABASE_URL'),
         },
       },
     });
   }
 
-  async onModuleInit() {
+  cleanDb() {
+    return this.$transaction([
+      this.bookmark.deleteMany(),
+      this.user.deleteMany(),
+    ]);
+  }
+    async onModuleInit() {
     try {
       await this.$connect();
       console.log('✅ Connected to the database successfully.');
