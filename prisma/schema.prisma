@@ -24,6 +24,7 @@ model User {
   bookmarks Bookmark[] // Relation: One user → Many bookmarks
 }
 
+
 model Bookmark {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())

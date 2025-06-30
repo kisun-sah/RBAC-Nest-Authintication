@@ -5,7 +5,7 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
-import { User } from '@prisma/client';
+// import { User } from '@prisma/client';
 import { GetUser } from '../auth/decorater';
 import { JwtGuard } from '../auth/guard/jwt.guard';
 import { EditUserDto } from './dto';
@@ -16,7 +16,7 @@ import { UserService } from './user.service';
 export class UserController {
   constructor(private userService: UserService) { }
   @Get('me')
-  getMe(@GetUser() user: User) {
+  getMe(@GetUser() user: any) {
     console.log('User email:', user.email); // Log the user's email
     return user;
 
