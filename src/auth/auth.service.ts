@@ -1,13 +1,14 @@
+// src/auth/auth.service.ts
 import {
   Injectable,
   ForbiddenException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthDto } from './dto';
+import { AuthDto } from './dto/auth.dto';
 import * as argon from 'argon2';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { Prisma } from '@prisma/client'; // ✅ FIX: use correct Prisma import
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -15,24 +16,23 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
-  ) { }
+  ) {}
 
   /**
-   * Registers a new user with hashed password
+   * Register a new user with hashed password
    */
   async signup(dto: AuthDto): Promise<{ access_token: string }> {
-    const hashedPassword = await argon.hash(dto.password);
+    const hash = await argon.hash(dto.password);
 
     try {
       const user = await this.prisma.user.create({
         data: {
           email: dto.email,
-          hash: hashedPassword,
-          firstName:dto.firstName,
-          lastName:dto.lastName
+          hash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
         },
       });
-      console.log(dto.email)
 
       return this.generateToken(user.id, user.email);
     } catch (error) {
@@ -40,14 +40,14 @@ export class AuthService {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        throw new ForbiddenException('Email already in use');
+        throw new ForbiddenException('Email already exists');
       }
       throw error;
     }
   }
 
   /**
-   * Logs in a user after verifying credentials
+   * Validate user login credentials
    */
   async signin(dto: AuthDto): Promise<{ access_token: string }> {
     const user = await this.prisma.user.findUnique({
@@ -58,9 +58,8 @@ export class AuthService {
       throw new ForbiddenException('Invalid credentials');
     }
 
-    const passwordMatches = await argon.verify(user.hash, dto.password);
-
-    if (!passwordMatches) {
+    const isPasswordValid = await argon.verify(user.hash, dto.password);
+    if (!isPasswordValid) {
       throw new ForbiddenException('Invalid credentials');
     }
 
@@ -68,14 +67,14 @@ export class AuthService {
   }
 
   /**
-   * Generates JWT access token
+   * Generate JWT token
    */
   private async generateToken(
     userId: number,
     email: string,
   ): Promise<{ access_token: string }> {
     const payload = { sub: userId, email };
-    const secret = this.config.getOrThrow<string>('JWT_SECRET'); // throws if not set
+    const secret = this.config.getOrThrow<string>('JWT_SECRET');
 
     const token = await this.jwt.signAsync(payload, {
       expiresIn: '15m',
