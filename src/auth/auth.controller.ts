@@ -1,26 +1,26 @@
-import {
-  Body,
-  Controller,
-  HttpCode,
-  HttpStatus,
-  Post,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Post, Request, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { AuthDto } from './dto';
+import { JwtGuard } from '../auth/guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private authService: AuthService) {}
 
-  @Post('signup')
-  signup(@Body() dto: AuthDto) {
-    return this.authService.signup(dto);
+  @Post('register')
+  register(@Body() body: any) {
+    return this.authService.register(body.email, body.password, body.role);
   }
 
-  @HttpCode(HttpStatus.OK)
-  @Post('signin')
-  signin(@Body() dto: AuthDto) {
-    return this.authService.signin(dto);
+  @Post('login')
+  async login(@Body() body: any) {
+    const user = await this.authService.validateUser(body.email, body.password);
+    if (!user) throw new Error('Invalid credentials');
+    return this.authService.login(user);
+  }
+
+  @UseGuards(JwtGuard)
+  @Post('profile')
+  getProfile(@Request() req) {
+    return req.user;
   }
 }
